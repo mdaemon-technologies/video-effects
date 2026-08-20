@@ -18,8 +18,9 @@ a 20-person call costs each participant exactly what a 2-person call costs.
 $ npm install @mdaemon/video-effects --save
 ```
 
-`@mediapipe/tasks-vision` is an optional peer dependency. Install it too unless
-you only ever intend to use the browser's native blur:
+`@mediapipe/tasks-vision` is an optional peer dependency, and **version 1.x is
+required**. Install it too unless you only ever intend to use the browser's
+native blur:
 
 ```cmd
 $ npm install @mediapipe/tasks-vision --save
@@ -31,18 +32,30 @@ MediaPipe needs its WASM runtime and a `.tflite` model at runtime. They are not
 bundled — every consumer serves static files from a different place, so you pass
 the location in as `assetBase`.
 
-Copy these out of `node_modules/@mediapipe/tasks-vision/wasm/` into whatever
-directory you serve:
+Copy the WASM runtime out of `node_modules/@mediapipe/tasks-vision/wasm/` into
+whatever directory you serve:
 
 ```
 vision_wasm_internal.js
 vision_wasm_internal.wasm
 vision_wasm_nosimd_internal.js
 vision_wasm_nosimd_internal.wasm
-selfie_segmenter_landscape.tflite
 ```
 
-The model file comes from Google's MediaPipe model garden. Roughly 3 MB total.
+Both variants are needed because the pair a browser actually fetches depends on
+whether it supports WASM SIMD; each browser downloads one of them, not both.
+(The `vision_wasm_module_internal.*` files in that directory are for MediaPipe's
+ES-module loader, which this package does not use — skip them.)
+
+The `.tflite` model is **not** in the npm package. Download
+`selfie_segmenter_landscape.tflite` separately from Google's MediaPipe model
+garden and serve it from the same directory, or point `modelAssetPath` wherever
+you put it.
+
+Budget roughly 11 MB on disk for the SIMD build and about 3.3 MB over the wire
+once your server gzips it, plus ~250 KB for the model. Serve the directory with
+compression enabled — the uncompressed transfer is the single biggest cost of
+turning an effect on for the first time.
 
 If your app sets a Content Security Policy, it needs `'wasm-unsafe-eval'` in
 `script-src` and `worker-src 'self' blob:`.
