@@ -1,0 +1,80 @@
+{
+  "name": "@mdaemon/video-effects",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Camera background blur and replacement for WebRTC video tracks, with a track-in/track-out API built on MediaPipe selfie segmentation",
+  "main": "dist/videoEffects.umd.js",
+  "module": "dist/videoEffects.mjs",
+  "browser": "dist/videoEffects.umd.js",
+  "common": "dist/videoEffects.cjs",
+  "typings": "dist/videoEffects.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "jest",
+    "dev-test": "jest --watchAll",
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "pub": "npm run build && npm run test && npm publish"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mdaemon-technologies/video-effects.git"
+  },
+  "keywords": [
+    "video",
+    "webrtc",
+    "background blur",
+    "virtual background",
+    "background replacement",
+    "segmentation",
+    "mediapipe",
+    "mediastreamtrack",
+    "camera",
+    "conferencing",
+    "typescript"
+  ],
+  "author": {
+    "name": "MDaemon Technologies, Ltd.",
+    "email": "jonathan.ehman@mdaemon.com",
+    "url": "https://www.mdaemon.com"
+  },
+  "license": "LGPL-2.1",
+  "bugs": {
+    "url": "https://github.com/mdaemon-technologies/video-effects/issues"
+  },
+  "homepage": "https://github.com/mdaemon-technologies/video-effects#readme",
+  "peerDependencies": {
+    "@mediapipe/tasks-vision": "^0.10.0"
+  },
+  "peerDependenciesMeta": {
+    "@mediapipe/tasks-vision": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@mediapipe/tasks-vision": "^0.10.22",
+    "@rollup/plugin-terser": "^1.0.0",
+    "@rollup/plugin-typescript": "^12.3.0",
+    "@types/jest": "^29.5.14",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "rollup": "^4.40.0",
+    "ts-jest": "^29.4.9",
+    "ts-node": "^10.9.2",
+    "tslib": "^2.8.1",
+    "typescript": "^5.8.3"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/videoEffects.d.ts",
+      "import": "./dist/videoEffects.mjs",
+      "require": "./dist/videoEffects.cjs",
+      "default": "./dist/videoEffects.umd.js"
+    }
+  }
+}
