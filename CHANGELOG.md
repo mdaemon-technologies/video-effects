@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.1.1] - 2026-08-21
+
+### Fixed
+
+- **The segmentation mask was inverted**: background blur and background images
+  were composited over the person while the real room stayed visible around
+  them. Any effect backed by segmentation was affected — only the native
+  `backgroundBlur` path, which does no compositing of its own, was correct.
+
+  `MPMask.getAsUint8Array()` returns the winning *category index* per pixel for
+  a category mask, not an intensity, and the selfie model labels the person as
+  category 0. The compositor read the mask as an intensity — "non-zero means
+  foreground" — so it selected exactly the wrong half of the frame before
+  drawing the replacement behind what survived.
+
+  The foreground test is now an equality against a named `PERSON_CATEGORY`
+  constant, so a model with a different label map is a one-line change.
+
+### Added
+
+- Tests covering the compositor's mask polarity and its composite-operation
+  order, driven through the existing `documentRef` injection point. `writeMask()`
+  and `render()` previously had no coverage at all, which is why the inversion
+  shipped.
+
 ## [1.1.0] - 2026-08-20
 
 ### Changed

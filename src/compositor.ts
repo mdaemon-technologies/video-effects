@@ -33,6 +33,21 @@ export function coverRect(srcWidth: number, srcHeight: number, dstWidth: number,
 const DEFAULT_BLUR_STRENGTH = 12;
 
 /**
+ * Category index the selfie segmenter assigns to the person.
+ *
+ * `MPMask.getAsUint8Array()` on a *category* mask returns the winning category
+ * index per pixel, not an intensity, and the selfie model puts the person at
+ * index 0. Reading it as an intensity — "non-zero means foreground" — inverts
+ * the mask, which shows up as the replacement background painted over the
+ * subject and the real room left visible around them.
+ *
+ * A model with a different label map only needs this constant changed. Switching
+ * to confidence masks (`outputConfidenceMasks`) would need the opposite test
+ * entirely, since those really are intensities.
+ */
+const PERSON_CATEGORY = 0;
+
+/**
  * Composites a segmentation mask over a camera frame using 2D canvas
  * operations.
  *
@@ -85,8 +100,9 @@ export default class Compositor {
 
   /**
    * Turn MediaPipe's per-pixel category mask into an alpha channel we can use
-   * as a clipping source. Values are treated as "non-zero means foreground",
-   * which holds for both the binary category mask and a confidence mask.
+   * as a clipping source: opaque over the person, transparent everywhere else.
+   * See `PERSON_CATEGORY` for why the test is an equality and not a truthiness
+   * check.
    */
   private writeMask(mask: Uint8Array, maskWidth: number, maskHeight: number): void {
     if (mask.length < maskWidth * maskHeight) {
@@ -105,7 +121,7 @@ export default class Compositor {
 
     const pixels = this.maskImage.data;
     for (let i = 0, p = 0; i < maskWidth * maskHeight; i += 1, p += 4) {
-      const value = mask[i] === 0 ? 0 : 255;
+      const value = mask[i] === PERSON_CATEGORY ? 255 : 0;
       pixels[p] = 255;
       pixels[p + 1] = 255;
       pixels[p + 2] = 255;

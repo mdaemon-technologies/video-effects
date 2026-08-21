@@ -1,6 +1,6 @@
 {
   "name": "@mdaemon/video-effects",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Camera background blur and replacement for WebRTC video tracks, with a track-in/track-out API built on MediaPipe selfie segmentation",
   "main": "dist/videoEffects.umd.js",

@@ -35,8 +35,9 @@ export default class Compositor {
     resize(width: number, height: number): void;
     /**
      * Turn MediaPipe's per-pixel category mask into an alpha channel we can use
-     * as a clipping source. Values are treated as "non-zero means foreground",
-     * which holds for both the binary category mask and a confidence mask.
+     * as a clipping source: opaque over the person, transparent everywhere else.
+     * See `PERSON_CATEGORY` for why the test is an equality and not a truthiness
+     * check.
      */
     private writeMask;
     /**

@@ -1,4 +1,4 @@
-import { coverRect, imageSourceSize } from "./compositor";
+import Compositor, { coverRect, imageSourceSize } from "./compositor";
 
 describe("coverRect", () => {
   it("fills exactly with no offset when the aspect ratios match", () => {
@@ -89,5 +89,125 @@ describe("imageSourceSize", () => {
       width: 640,
       height: 480
     });
+  });
+});
+
+/**
+ * jsdom has no canvas backend, so the compositor is driven through its
+ * `documentRef` injection point against hand-rolled canvases that record what
+ * was drawn. That is enough to pin the one thing the real canvas would
+ * otherwise hide: which side of the mask the subject is on.
+ */
+interface Probe {
+  calls: Array<{ op: string; image: unknown; filter: string }>;
+  puts: Array<{ data: Uint8ClampedArray; width: number; height: number }>;
+}
+
+interface ProbeCanvas {
+  width: number;
+  height: number;
+  probe: Probe;
+  getContext: () => unknown;
+}
+
+const fakeCanvas = (): ProbeCanvas => {
+  const probe: Probe = { calls: [], puts: [] };
+  const ctx = {
+    globalCompositeOperation: "source-over",
+    filter: "none",
+    save: () => undefined,
+    restore: () => undefined,
+    clearRect: () => undefined,
+    drawImage: (image: unknown) => {
+      probe.calls.push({ op: ctx.globalCompositeOperation, image, filter: ctx.filter });
+    },
+    createImageData: (w: number, h: number) => ({
+      data: new Uint8ClampedArray(w * h * 4),
+      width: w,
+      height: h
+    }),
+    putImageData: (image: { data: Uint8ClampedArray; width: number; height: number }) => {
+      // Copy: the compositor reuses one ImageData across frames.
+      probe.puts.push({ data: image.data.slice(), width: image.width, height: image.height });
+    }
+  };
+  return { width: 0, height: 0, probe, getContext: () => ctx };
+};
+
+const fakeDocument = () => {
+  const canvases: ProbeCanvas[] = [];
+  const doc = {
+    createElement: () => {
+      const canvas = fakeCanvas();
+      canvases.push(canvas);
+      return canvas;
+    }
+  };
+  return { doc: doc as unknown as Document, canvases };
+};
+
+const alphaOf = (put: { data: Uint8ClampedArray }): number[] => {
+  const alpha: number[] = [];
+  for (let p = 3; p < put.data.length; p += 4) {
+    alpha.push(put.data[p]);
+  }
+  return alpha;
+};
+
+// 0 is the person; 1 is the room behind them.
+const MASK = { data: new Uint8Array([0, 1, 1, 0, 0, 1, 1, 0]), width: 4, height: 2 };
+const SOURCE = { width: 4, height: 2 } as unknown as CanvasImageSource;
+
+describe("Compositor mask polarity", () => {
+  const setup = () => {
+    const { doc, canvases } = fakeDocument();
+    const compositor = new Compositor(4, 2, doc);
+    return { compositor, output: canvases[0], maskCanvas: canvases[1] };
+  };
+
+  it("makes the mask opaque over the person and transparent over the background", () => {
+    const { compositor, maskCanvas } = setup();
+    compositor.render(SOURCE, MASK, { type: "blur", strength: 8 }, null);
+
+    // The alpha channel is the clip: 255 keeps the camera pixel, 0 lets the
+    // replacement background through. Inverting this is the bug that paints the
+    // background over the subject.
+    expect(alphaOf(maskCanvas.probe.puts[0])).toEqual([255, 0, 0, 255, 255, 0, 0, 255]);
+  });
+
+  it("clips the camera to the person, then paints the background behind it", () => {
+    const { compositor, output, maskCanvas } = setup();
+    compositor.render(SOURCE, MASK, { type: "blur", strength: 8 }, null);
+
+    const calls = output.probe.calls;
+    expect(calls.map((c) => c.op)).toEqual(["source-over", "destination-in", "destination-over"]);
+    expect(calls[0].image).toBe(SOURCE);
+    expect(calls[1].image).toBe(maskCanvas);
+    expect(calls[2].image).toBe(SOURCE);
+    expect(calls[2].filter).toBe("blur(8px)");
+  });
+
+  it("draws a background image behind the person rather than over them", () => {
+    const { compositor, output } = setup();
+    const background = { width: 8, height: 4 } as unknown as CanvasImageSource;
+    compositor.render(SOURCE, MASK, { type: "image", source: "https://example.test/bg.png" }, background);
+
+    const last = output.probe.calls[output.probe.calls.length - 1];
+    expect(last.op).toBe("destination-over");
+    expect(last.image).toBe(background);
+  });
+
+  it("leaves the frame untouched when there is no mask", () => {
+    const { compositor, output, maskCanvas } = setup();
+    compositor.render(SOURCE, null, { type: "blur" }, null);
+
+    expect(output.probe.calls.map((c) => c.op)).toEqual(["source-over"]);
+    expect(maskCanvas.probe.puts).toHaveLength(0);
+  });
+
+  it("rejects a mask smaller than its stated dimensions", () => {
+    const { compositor } = setup();
+    const short = { data: new Uint8Array(3), width: 4, height: 2 };
+    expect(() => compositor.render(SOURCE, short, { type: "blur" }, null)).toThrow(RangeError);
   });
 });
