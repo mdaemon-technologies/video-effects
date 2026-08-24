@@ -49,18 +49,34 @@ export interface VideoEffectsOptions {
     preferNativeBlur?: boolean;
     /** Frame-budget watchdog settings, or `false` to disable it entirely. */
     watchdog?: WatchdogOptions | false;
+    /**
+     * Document used to create the compositing canvases and the fallback path's
+     * `<video>` element. Defaults to the ambient `document`; supplying one is the
+     * injection point that makes the capture paths testable outside a browser.
+     */
+    documentRef?: Document;
 }
 export interface DegradedEvent {
     /** Mean frame processing time over the sample window, in milliseconds. */
     averageMs: number;
     /** The budget that was exceeded. */
     budgetMs: number;
+    /**
+     * Why the effect was abandoned.
+     *
+     * `"budget"` is the watchdog: segmentation was consistently too slow for the
+     * machine. `"segmentation"` is a persistent failure inside MediaPipe - raw
+     * video kept flowing throughout, but the effect could not be applied to it.
+     */
+    reason: "budget" | "segmentation";
 }
 export interface VideoEffectsEventMap {
     /**
-     * The watchdog tripped: processing is too slow on this machine and the raw
-     * camera track has been passed through instead. Not fatal — the call keeps
-     * running without the effect.
+     * The effect was abandoned and the raw camera track is passing through
+     * instead: either the watchdog tripped because processing is too slow on this
+     * machine, or segmentation failed for long enough to be considered permanent.
+     * Not fatal — the call keeps running without the effect, and `reason` tells
+     * the two apart.
      */
     degraded: DegradedEvent;
     /** A processing or initialisation error. The effect is off when this fires. */

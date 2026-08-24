@@ -1,5 +1,70 @@
 # Changelog
 
+## [1.2.0] - 2026-08-24
+
+### Fixed
+
+- **A repeated frame timestamp froze the published track permanently.** The
+  WebCodecs path handed MediaPipe the source's own timestamp unguarded. VIDEO
+  running mode requires strictly increasing timestamps, and a capture source
+  that repeats one — a stalled camera, a duplicated frame, a clock coarsened for
+  fingerprinting defence — faults the graph.
+
+  The fault was unrecoverable and silent. `renderFrame()` caught the throw and
+  returned false, so the transform never enqueued; every later frame threw the
+  same way, so nothing was ever enqueued again. The track stayed live while
+  producing no frames at all, which every other participant saw as a frozen
+  picture. The watchdog could not rescue it either, because it only ever
+  recorded frames that actually rendered — so `degraded` never fired and the
+  republish path consumers built for the slow-machine case was never reached.
+
+  The timestamp handed to the segmenter is now forced monotonic on both capture
+  paths, bumped by a millisecond when a source repeats or rewinds one. Only the
+  segmenter's input is adjusted: the frame published downstream keeps its own
+  timestamp, so output pacing is untouched.
+
+- **A failed segmentation no longer drops the frame.** It is composited with a
+  null mask instead, which draws the camera frame untouched, so a fault shows as
+  live unmasked video rather than a frozen picture. After a full second of
+  consecutive failures the effect is abandoned through the same path the
+  watchdog uses — `degraded`, then `stop()` — so consumers reach their recovery
+  without needing to special-case it.
+
+- **`error` is emitted once per run of failures, not once per frame.** A
+  permanent fault at 30fps previously fired a consumer's error handler thirty
+  times a second, which is its own outage.
+
+- **Re-applying an effect could feed a stale frame to the new segmenter.**
+  `process()` calls `stop()` and then sets up again across two awaits; an
+  aborted pipeline's in-flight callbacks re-read `running`, saw it true again,
+  and could hand a frame — and its already-consumed timestamp — to the segmenter
+  that replaced theirs. Worse, `process()` assigned the new segmenter straight to
+  a shared field, so two overlapping calls clobbered and leaked one another's.
+
+  Every pipeline now carries a generation stamp that `stop()` bumps. Frame
+  callbacks check it before touching anything, and `process()` re-checks it after
+  each await: a superseded call closes the segmenter it built and returns the
+  input track instead of racing the call that replaced it.
+
+### Added
+
+- `degraded` events carry a `reason`: `"budget"` when the watchdog tripped
+  because the machine is too slow, `"segmentation"` when MediaPipe failed
+  persistently. Both mean the same thing to a consumer — the effect is off and
+  the raw track is carrying the call — but they need different diagnostics.
+- `documentRef` option, matching the injection point `Compositor` already had.
+  It supplies the document used for the compositing canvases and the fallback
+  path's `<video>` element.
+- Tests covering both capture paths end to end, driven through Node's web
+  streams and hand-rolled WebCodecs constructors, against a fake segmenter that
+  enforces MediaPipe's real timestamp contract. Neither path had any coverage
+  before, which is how an unguarded timestamp shipped.
+
+### Changed
+
+- `fx.degraded` now reports whether the effect was given up on for any reason,
+  rather than reading the watchdog alone.
+
 ## [1.1.1] - 2026-08-21
 
 ### Fixed

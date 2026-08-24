@@ -5,11 +5,12 @@ import SelfieSegmenter from "./segmenter.js";
 import { detectCapabilities } from "./capabilities.js";
 import { applyNativeBackgroundBlur } from "./nativeBlur.js";
 import { assertEffect, decodeBackground } from "./effects.js";
-import type { VisionModule } from "./segmenter.js";
+import type { MaskResult, VisionModule } from "./segmenter.js";
 import type { WebCodecsScope, VideoFrameLike } from "./domExtras.js";
 import type {
   BackgroundEffect,
   Capabilities,
+  DegradedEvent,
   VideoEffectsEventMap,
   VideoEffectsOptions
 } from "./types.js";
@@ -25,6 +26,13 @@ export type {
 } from "./types.js";
 
 const DEFAULT_FPS = 30;
+
+/**
+ * Consecutive segmentation failures tolerated before the effect is abandoned.
+ * One second at 30fps: long enough to ride out a transient fault, short enough
+ * that nobody sits watching unmasked video wondering whether it will come back.
+ */
+const MAX_CONSECUTIVE_FAILURES = 30;
 
 export interface ProcessOptions {
   /** Pre-resolved MediaPipe module, for consumers that load it by script tag. */
@@ -47,6 +55,7 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
   private readonly targetFps: number;
   private readonly preferNativeBlur: boolean;
   private readonly watchdogOptions: VideoEffectsOptions["watchdog"];
+  private readonly documentRef?: Document;
 
   private currentEffect: BackgroundEffect = { type: "none" };
   private segmenter: SelfieSegmenter | null = null;
@@ -59,6 +68,15 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
   private usingNativeBlur = false;
   private teardown: Array<() => void> = [];
   private running = false;
+  private gaveUp = false;
+  private lastSegmentTimestamp = -1;
+  private consecutiveFailures = 0;
+  /**
+   * Incremented by every `stop()`. Frame callbacks capture the value they were
+   * started with and compare, so a pipeline that has been torn down cannot feed
+   * whatever replaced it.
+   */
+  private generation = 0;
 
   constructor(options: VideoEffectsOptions) {
     super();
@@ -74,6 +92,7 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
     this.targetFps = targetFps;
     this.preferNativeBlur = options.preferNativeBlur ?? true;
     this.watchdogOptions = options.watchdog;
+    this.documentRef = options.documentRef;
   }
 
   static capabilities(): Capabilities {
@@ -88,9 +107,9 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
     return this.currentEffect;
   }
 
-  /** True once the watchdog gave up and the raw track is passing through. */
+  /** True once the effect was abandoned and the raw track is passing through. */
   get degraded(): boolean {
-    return this.watchdog ? this.watchdog.tripped : false;
+    return this.gaveUp;
   }
 
   /** True when the platform is blurring in hardware and we are doing nothing. */
@@ -134,7 +153,12 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
       throw new TypeError("process() requires a video MediaStreamTrack");
     }
     this.stop();
+    // stop() bumped the generation, so this is ours. Every await below re-checks
+    // it: a second process() landing mid-flight owns the pipeline from then on,
+    // and this call has to bow out rather than race it.
+    const generation = this.generation;
     this.sourceTrack = track;
+    this.gaveUp = false;
 
     if (this.currentEffect.type === "none") {
       return track;
@@ -143,6 +167,9 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
     // Free path first: let the OS do it if it can.
     if (this.preferNativeBlur && this.currentEffect.type === "blur") {
       const applied = await applyNativeBackgroundBlur(track, true);
+      if (generation !== this.generation) {
+        return track;
+      }
       if (applied) {
         this.usingNativeBlur = true;
         return track;
@@ -155,8 +182,9 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
       return track;
     }
 
+    let segmenter: SelfieSegmenter;
     try {
-      this.segmenter = await SelfieSegmenter.create({
+      segmenter = await SelfieSegmenter.create({
         assetBase: this.assetBase,
         modelAssetPath: this.modelAssetPath,
         visionModule: processOptions.visionModule
@@ -166,17 +194,25 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
       return track;
     }
 
+    // Assigning straight to this.segmenter would clobber - and leak - the one a
+    // process() that started later already installed.
+    if (generation !== this.generation) {
+      segmenter.close();
+      return track;
+    }
+    this.segmenter = segmenter;
+
     const settings = track.getSettings();
     const width = settings.width ?? 640;
     const height = settings.height ?? 360;
-    this.compositor = new Compositor(width, height);
+    this.compositor = new Compositor(width, height, this.documentRef);
     this.watchdog = this.watchdogOptions === false ? null : new FrameWatchdog(this.watchdogOptions ?? {});
     this.running = true;
 
     try {
       this.outputTrack = capabilities.insertableStreams
-        ? this.startWebCodecsPath(track)
-        : this.startCanvasPath(track, width, height);
+        ? this.startWebCodecsPath(track, generation)
+        : this.startCanvasPath(track, width, height, generation);
     } catch (cause) {
       this.stop();
       this.emit("error", cause instanceof Error ? cause : new Error(String(cause)));
@@ -190,40 +226,107 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
     return this.outputTrack;
   }
 
-  /** Render one frame through the segmenter, with watchdog accounting. */
-  private renderFrame(source: CanvasImageSource, timestampMs: number): boolean {
-    if (!this.compositor || !this.segmenter) {
+  /**
+   * Force the timestamp handed to MediaPipe to increase.
+   *
+   * VIDEO running mode rejects any timestamp that is not strictly greater than
+   * the last one it accepted, and the rejection is permanent: the graph faults
+   * and every frame after it throws the same way. Capture sources really do
+   * repeat timestamps - a stalled camera, a duplicated frame, a clock coarsened
+   * for fingerprinting defence - so the value is forced monotonic here rather
+   * than trusted.
+   *
+   * Only the segmenter's input is adjusted. The frame published downstream keeps
+   * its own timestamp, so output pacing is untouched. The step is a whole
+   * millisecond because MediaPipe converts to microseconds internally and a
+   * smaller nudge could round away.
+   *
+   * A non-finite candidate fails the comparison and falls through to the
+   * increment, which is why there is no separate NaN check.
+   */
+  private nextTimestamp(candidate: number): number {
+    const next = candidate > this.lastSegmentTimestamp ? candidate : this.lastSegmentTimestamp + 1;
+    this.lastSegmentTimestamp = next;
+    return next;
+  }
+
+  /**
+   * Render one frame through the segmenter, with watchdog accounting.
+   *
+   * @param candidateMs the source's own timestamp, in milliseconds. A candidate
+   *   rather than the value used - see `nextTimestamp`.
+   * @returns whether the compositor now holds a frame worth publishing.
+   */
+  private renderFrame(source: CanvasImageSource, candidateMs: number): boolean {
+    const compositor = this.compositor;
+    const segmenter = this.segmenter;
+    if (!compositor || !segmenter) {
       return false;
     }
     const started = performance.now();
-    let mask = null;
+    let mask: MaskResult | null = null;
     try {
-      mask = this.segmenter.segment(source, timestampMs);
+      mask = segmenter.segment(source, this.nextTimestamp(candidateMs));
+      this.consecutiveFailures = 0;
     } catch (cause) {
-      this.emit("error", cause instanceof Error ? cause : new Error(String(cause)));
-      return false;
+      // A failed segmentation is not a reason to stop publishing. A null mask
+      // composites the frame untouched, so the far end sees live unmasked video
+      // instead of the frozen picture that dropping the frame leaves behind - on
+      // the WebCodecs path a dropped frame is never enqueued at all, so the
+      // track stays live while producing nothing.
+      compositor.render(source, null, this.currentEffect, this.backgroundImage);
+      this.noteFailure(cause);
+      return true;
     }
-    this.compositor.render(source, mask, this.currentEffect, this.backgroundImage);
+    compositor.render(source, mask, this.currentEffect, this.backgroundImage);
 
+    // Only successful frames are recorded: a throw returns in microseconds and
+    // would drag the average down, hiding a fault behind a healthy-looking
+    // budget. Persistent failure has its own counter.
     if (this.watchdog && this.watchdog.record(performance.now() - started)) {
-      this.emit("degraded", {
-        averageMs: this.watchdog.averageMs,
-        budgetMs: this.watchdog.budgetMs
-      });
-      this.stop();
+      this.giveUp("budget", this.watchdog.averageMs, this.watchdog.budgetMs);
     }
     return true;
   }
 
+  /** Account for one failed segmentation, and give up if they keep coming. */
+  private noteFailure(cause: unknown): void {
+    this.consecutiveFailures += 1;
+    // One error per streak rather than one per frame: a permanent fault at 30fps
+    // would otherwise fire a consumer's error handler thirty times a second,
+    // which is its own outage.
+    if (this.consecutiveFailures === 1) {
+      this.emit("error", cause instanceof Error ? cause : new Error(String(cause)));
+    }
+    if (this.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      this.giveUp(
+        "segmentation",
+        this.watchdog ? this.watchdog.averageMs : 0,
+        this.watchdog ? this.watchdog.budgetMs : 0
+      );
+    }
+  }
+
+  /**
+   * Abandon the effect and say so. Callers listening for `degraded` swap the raw
+   * camera back in; this is the only route to that event, so both the watchdog
+   * and a stuck segmenter reach it.
+   */
+  private giveUp(reason: DegradedEvent["reason"], averageMs: number, budgetMs: number): void {
+    this.gaveUp = true;
+    this.emit("degraded", { averageMs, budgetMs, reason });
+    this.stop();
+  }
+
   /** Chromium: WebCodecs frame-by-frame transform. */
-  private startWebCodecsPath(track: MediaStreamTrack): MediaStreamTrack {
+  private startWebCodecsPath(track: MediaStreamTrack, generation: number): MediaStreamTrack {
     const scope = globalThis as unknown as WebCodecsScope;
     const processor = new scope.MediaStreamTrackProcessor({ track });
     const generator = new scope.MediaStreamTrackGenerator({ kind: "video" });
 
     const transformer = new TransformStream<VideoFrameLike, VideoFrameLike>({
       transform: (frame, controller) => {
-        if (!this.running || !this.compositor) {
+        if (generation !== this.generation || !this.running || !this.compositor) {
           frame.close();
           return;
         }
@@ -254,8 +357,13 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
   }
 
   /** Firefox and Safari: video element into a captured canvas. */
-  private startCanvasPath(track: MediaStreamTrack, width: number, height: number): MediaStreamTrack {
-    const video = document.createElement("video");
+  private startCanvasPath(
+    track: MediaStreamTrack,
+    width: number,
+    height: number,
+    generation: number
+  ): MediaStreamTrack {
+    const video = (this.documentRef ?? document).createElement("video");
     video.srcObject = new MediaStream([track]);
     video.muted = true;
     video.playsInline = true;
@@ -274,14 +382,16 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
     const hasFrameCallback = typeof video.requestVideoFrameCallback === "function";
 
     const step = (now: number): void => {
-      if (!this.running) {
+      if (generation !== this.generation || !this.running) {
         return;
       }
       if (video.videoWidth > 0) {
         compositor.resize(video.videoWidth, video.videoHeight);
         this.renderFrame(video, now);
       }
-      if (hasFrameCallback && this.running) {
+      // Re-checked after the render, not just before it: giving up on the effect
+      // tears the pipeline down from inside renderFrame.
+      if (hasFrameCallback && generation === this.generation && this.running) {
         handle = video.requestVideoFrameCallback(step);
       }
     };
@@ -316,7 +426,13 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
    * responsible for stopping the camera.
    */
   stop(): void {
+    // Bumped first: a frame callback still in flight from the pipeline being torn
+    // down reads this and drops its frame, rather than handing a stale frame -
+    // and a stale timestamp - to whatever segmenter replaces this one.
+    this.generation += 1;
     this.running = false;
+    this.lastSegmentTimestamp = -1;
+    this.consecutiveFailures = 0;
     const pending = this.teardown.splice(0);
     for (const fn of pending) {
       try {
@@ -339,6 +455,7 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
   /** Stop processing and drop every listener. */
   destroy(): void {
     this.stop();
+    this.gaveUp = false;
     this.usingNativeBlur = false;
     this.sourceTrack = null;
     this.watchdog = null;

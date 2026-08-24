@@ -88,6 +88,7 @@ const VideoEffects = require("@mdaemon/video-effects/dist/videoEffects.cjs");
 | `targetFps` | `number` | `30` | Output frame rate for the canvas fallback path. |
 | `preferNativeBlur` | `boolean` | `true` | Use hardware blur when the platform offers it. |
 | `watchdog` | `WatchdogOptions \| false` | `{}` | Frame-budget monitor; `false` disables it. |
+| `documentRef` | `Document` | ambient `document` | Injection point for the canvases and the fallback `<video>`; only useful in tests. |
 
 ### `setEffect(effect): Promise<void>`
 
@@ -131,15 +132,27 @@ await producer.replaceTrack({ track: await fx.process(raw) });
 ### Events
 
 ```js
-fx.on("degraded", ({ averageMs, budgetMs }) => { /* effect gave up; raw video continues */ });
-fx.on("error", (error) => { /* effect is off */ });
+fx.on("degraded", ({ averageMs, budgetMs, reason }) => { /* effect gave up; raw video continues */ });
+fx.on("error", (error) => { /* the effect is off, or a run of frames failed */ });
 fx.on("effectchange", (effect) => { /* reflect the new state in the UI */ });
 ```
 
-`degraded` fires when segmentation is consistently too slow for the machine. The
-effect switches off and the raw track keeps flowing — a call without a blurred
-background beats a call that stutters. Recovery is deliberately not automatic;
-flapping the effect on and off reads as a bug. Call `process()` again to retry.
+`degraded` fires when the effect is abandoned and the raw camera track takes
+over. `reason` says why:
+
+| `reason` | Meaning |
+|----------|---------|
+| `"budget"` | The watchdog tripped: segmentation is consistently too slow for this machine. |
+| `"segmentation"` | MediaPipe failed on every frame for a full second. Unmasked video was published throughout. |
+
+Either way the raw track keeps flowing — a call without a blurred background
+beats a call that stutters, and beats one that freezes. Recovery is deliberately
+not automatic; flapping the effect on and off reads as a bug. Call `process()`
+again to retry.
+
+A single failed frame is not fatal: it is composited unmasked and published, so
+the far end sees live video rather than a frozen picture. One `error` is emitted
+per run of failures, not one per frame.
 
 ### Other members
 
@@ -148,7 +161,7 @@ flapping the effect on and off reads as a bug. Call `process()` again to retry.
 | `VideoEffects.isSupported()` | Whether any capture path exists in this browser. |
 | `VideoEffects.capabilities()` | Full capability breakdown. |
 | `fx.effect` | The current effect. |
-| `fx.degraded` | Whether the watchdog has given up. |
+| `fx.degraded` | Whether the effect has been given up on. |
 | `fx.usingHardwareBlur` | Whether the platform is doing the work. |
 | `fx.stop()` | Tear down processing; leaves the source track alone. |
 | `fx.destroy()` | `stop()` plus drop all listeners. |

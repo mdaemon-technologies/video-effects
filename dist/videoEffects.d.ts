@@ -22,6 +22,7 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
     private readonly targetFps;
     private readonly preferNativeBlur;
     private readonly watchdogOptions;
+    private readonly documentRef?;
     private currentEffect;
     private segmenter;
     private compositor;
@@ -32,11 +33,20 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
     private usingNativeBlur;
     private teardown;
     private running;
+    private gaveUp;
+    private lastSegmentTimestamp;
+    private consecutiveFailures;
+    /**
+     * Incremented by every `stop()`. Frame callbacks capture the value they were
+     * started with and compare, so a pipeline that has been torn down cannot feed
+     * whatever replaced it.
+     */
+    private generation;
     constructor(options: VideoEffectsOptions);
     static capabilities(): Capabilities;
     static isSupported(): boolean;
     get effect(): BackgroundEffect;
-    /** True once the watchdog gave up and the raw track is passing through. */
+    /** True once the effect was abandoned and the raw track is passing through. */
     get degraded(): boolean;
     /** True when the platform is blurring in hardware and we are doing nothing. */
     get usingHardwareBlur(): boolean;
@@ -52,8 +62,41 @@ export default class VideoEffects extends TinyEmitter<VideoEffectsEventMap> {
      *   capture path is available - callers do not need to branch on that.
      */
     process(track: MediaStreamTrack, processOptions?: ProcessOptions): Promise<MediaStreamTrack>;
-    /** Render one frame through the segmenter, with watchdog accounting. */
+    /**
+     * Force the timestamp handed to MediaPipe to increase.
+     *
+     * VIDEO running mode rejects any timestamp that is not strictly greater than
+     * the last one it accepted, and the rejection is permanent: the graph faults
+     * and every frame after it throws the same way. Capture sources really do
+     * repeat timestamps - a stalled camera, a duplicated frame, a clock coarsened
+     * for fingerprinting defence - so the value is forced monotonic here rather
+     * than trusted.
+     *
+     * Only the segmenter's input is adjusted. The frame published downstream keeps
+     * its own timestamp, so output pacing is untouched. The step is a whole
+     * millisecond because MediaPipe converts to microseconds internally and a
+     * smaller nudge could round away.
+     *
+     * A non-finite candidate fails the comparison and falls through to the
+     * increment, which is why there is no separate NaN check.
+     */
+    private nextTimestamp;
+    /**
+     * Render one frame through the segmenter, with watchdog accounting.
+     *
+     * @param candidateMs the source's own timestamp, in milliseconds. A candidate
+     *   rather than the value used - see `nextTimestamp`.
+     * @returns whether the compositor now holds a frame worth publishing.
+     */
     private renderFrame;
+    /** Account for one failed segmentation, and give up if they keep coming. */
+    private noteFailure;
+    /**
+     * Abandon the effect and say so. Callers listening for `degraded` swap the raw
+     * camera back in; this is the only route to that event, so both the watchdog
+     * and a stuck segmenter reach it.
+     */
+    private giveUp;
     /** Chromium: WebCodecs frame-by-frame transform. */
     private startWebCodecsPath;
     /** Firefox and Safari: video element into a captured canvas. */

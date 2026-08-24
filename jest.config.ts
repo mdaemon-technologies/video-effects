@@ -15,7 +15,11 @@ const config: Config.InitialOptions = {
       {
         tsconfig: {
           module: "commonjs",
-          verbatimModuleSyntax: false
+          verbatimModuleSyntax: false,
+          // Tests only. The build config stays browser-only so nothing in src/ can
+          // reach for a Node global; the capture-path tests need node:stream/web
+          // because jsdom ships no web streams.
+          types: ["jest", "node"]
         }
       }
     ]
