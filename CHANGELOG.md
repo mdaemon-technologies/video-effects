@@ -1,6 +1,30 @@
 # Changelog
 
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ## [1.2.0] - 2026-08-24
+
+### Added
+
+- `degraded` events carry a `reason`: `"budget"` when the watchdog tripped
+  because the machine is too slow, `"segmentation"` when MediaPipe failed
+  persistently. Both mean the same thing to a consumer — the effect is off and
+  the raw track is carrying the call — but they need different diagnostics.
+- `documentRef` option, matching the injection point `Compositor` already had.
+  It supplies the document used for the compositing canvases and the fallback
+  path's `<video>` element.
+- Tests covering both capture paths end to end, driven through Node's web
+  streams and hand-rolled WebCodecs constructors, against a fake segmenter that
+  enforces MediaPipe's real timestamp contract. Neither path had any coverage
+  before, which is how an unguarded timestamp shipped.
+
+### Changed
+
+- `fx.degraded` now reports whether the effect was given up on for any reason,
+  rather than reading the watchdog alone.
 
 ### Fixed
 
@@ -46,26 +70,14 @@
   each await: a superseded call closes the segmenter it built and returns the
   input track instead of racing the call that replaced it.
 
+## [1.1.1] - 2026-08-21
+
 ### Added
 
-- `degraded` events carry a `reason`: `"budget"` when the watchdog tripped
-  because the machine is too slow, `"segmentation"` when MediaPipe failed
-  persistently. Both mean the same thing to a consumer — the effect is off and
-  the raw track is carrying the call — but they need different diagnostics.
-- `documentRef` option, matching the injection point `Compositor` already had.
-  It supplies the document used for the compositing canvases and the fallback
-  path's `<video>` element.
-- Tests covering both capture paths end to end, driven through Node's web
-  streams and hand-rolled WebCodecs constructors, against a fake segmenter that
-  enforces MediaPipe's real timestamp contract. Neither path had any coverage
-  before, which is how an unguarded timestamp shipped.
-
-### Changed
-
-- `fx.degraded` now reports whether the effect was given up on for any reason,
-  rather than reading the watchdog alone.
-
-## [1.1.1] - 2026-08-21
+- Tests covering the compositor's mask polarity and its composite-operation
+  order, driven through the existing `documentRef` injection point. `writeMask()`
+  and `render()` previously had no coverage at all, which is why the inversion
+  shipped.
 
 ### Fixed
 
@@ -82,13 +94,6 @@
 
   The foreground test is now an equality against a named `PERSON_CATEGORY`
   constant, so a model with a different label map is a one-line change.
-
-### Added
-
-- Tests covering the compositor's mask polarity and its composite-operation
-  order, driven through the existing `documentRef` injection point. `writeMask()`
-  and `render()` previously had no coverage at all, which is why the inversion
-  shipped.
 
 ## [1.1.0] - 2026-08-20
 
@@ -120,9 +125,16 @@
   figures are now given, along with a note that only one of the SIMD/no-SIMD
   pair is fetched per browser.
 
-## [1.0.0] - 2026-08-19
+## [1.0.0] - 2026-08-20
 
 Initial release.
+
+`@mediapipe/tasks-vision` is an **optional peer dependency**, resolved lazily
+the first time a segmentation-backed effect is enabled. It is never bundled,
+so consumers that only use native blur never download it.
+
+The MediaPipe WASM runtime and `.tflite` model are not shipped in the package;
+serve them yourself and point `assetBase` at them.
 
 ### Added
 
@@ -141,10 +153,7 @@ Initial release.
   probing ahead of showing the UI.
 - `coverRect()` aspect-preserving fit for background images.
 
-### Notes
-
-- `@mediapipe/tasks-vision` is an **optional peer dependency**, resolved lazily
-  the first time a segmentation-backed effect is enabled. It is never bundled,
-  so consumers that only use native blur never download it.
-- The MediaPipe WASM runtime and `.tflite` model are not shipped in the package;
-  serve them yourself and point `assetBase` at them.
+[1.2.0]: https://www.npmjs.com/package/@mdaemon/video-effects/v/1.2.0
+[1.1.1]: https://www.npmjs.com/package/@mdaemon/video-effects/v/1.1.1
+[1.1.0]: https://www.npmjs.com/package/@mdaemon/video-effects/v/1.1.0
+[1.0.0]: https://www.npmjs.com/package/@mdaemon/video-effects/v/1.0.0

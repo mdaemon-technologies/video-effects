@@ -1,7 +1,12 @@
-# @mdaemon/video-effects, camera background blur and replacement for WebRTC video tracks
-[![Dynamic JSON Badge](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmdaemon-technologies%2Fvideo-effects%2Fmain%2Fpackage.json&query=%24.version&prefix=v&label=npm&color=blue)](https://www.npmjs.com/package/@mdaemon/video-effects) [![Static Badge](https://img.shields.io/badge/node-v20%2B-blue?style=flat&label=node&color=blue)](https://nodejs.org) [![install size](https://packagephobia.com/badge?p=@mdaemon/video-effects)](https://packagephobia.com/result?p=@mdaemon/video-effects) [![Dynamic JSON Badge](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmdaemon-technologies%2Fvideo-effects%2Fmain%2Fpackage.json&query=%24.license&prefix=v&label=license&color=green)](https://github.com/mdaemon-technologies/video-effects/blob/main/LICENSE) [![Node.js CI](https://github.com/mdaemon-technologies/video-effects/actions/workflows/node.js.yml/badge.svg)](https://github.com/mdaemon-technologies/video-effects/actions/workflows/node.js.yml)
+# @mdaemon/video-effects
 
-[ [@mdaemon/video-effects on npm](https://www.npmjs.com/package/@mdaemon/video-effects "npm") ]
+[![npm](https://img.shields.io/npm/v/@mdaemon/video-effects?color=blue)](https://www.npmjs.com/package/@mdaemon/video-effects)
+[![license](https://img.shields.io/npm/l/@mdaemon/video-effects?color=green)](LICENSE)
+[![node](https://img.shields.io/node/v/@mdaemon/video-effects)](https://nodejs.org)
+[![install size](https://packagephobia.com/badge?p=@mdaemon/video-effects)](https://packagephobia.com/result?p=@mdaemon/video-effects)
+[![CI](https://github.com/mdaemon-technologies/video-effects/actions/workflows/node.js.yml/badge.svg)](https://github.com/mdaemon-technologies/video-effects/actions/workflows/node.js.yml)
+
+Camera background blur and replacement for WebRTC video tracks, with a track-in/track-out API built on MediaPipe selfie segmentation
 
 Track in, track out. Give it the local camera track, get back a track whose
 background is blurred or replaced, and publish that instead. Everything
@@ -14,16 +19,36 @@ a 20-person call costs each participant exactly what a 2-person call costs.
 
 ## Install
 
-```cmd
-$ npm install @mdaemon/video-effects --save
+```bash
+npm install @mdaemon/video-effects
 ```
 
 `@mediapipe/tasks-vision` is an optional peer dependency, and **version 1.x is
 required**. Install it too unless you only ever intend to use the browser's
 native blur:
 
-```cmd
-$ npm install @mediapipe/tasks-vision --save
+```bash
+npm install @mediapipe/tasks-vision
+```
+
+## Usage
+
+### ES modules
+
+```js
+import VideoEffects from "@mdaemon/video-effects";
+```
+
+### CommonJS
+
+```js
+const VideoEffects = require("@mdaemon/video-effects");
+```
+
+### Browser (UMD)
+
+```html
+<script type="text/javascript" src="/path_to_modules/dist/videoEffects.umd.js"></script>
 ```
 
 ## Serving the assets
@@ -35,7 +60,7 @@ the location in as `assetBase`.
 Copy the WASM runtime out of `node_modules/@mediapipe/tasks-vision/wasm/` into
 whatever directory you serve:
 
-```
+```text
 vision_wasm_internal.js
 vision_wasm_internal.wasm
 vision_wasm_nosimd_internal.js
@@ -59,23 +84,6 @@ turning an effect on for the first time.
 
 If your app sets a Content Security Policy, it needs `'wasm-unsafe-eval'` in
 `script-src` and `worker-src 'self' blob:`.
-
-## Usage
-
-### Node Modules
-```js
-import VideoEffects from "@mdaemon/video-effects/dist/videoEffects.mjs";
-```
-
-### Node CommonJS
-```js
-const VideoEffects = require("@mdaemon/video-effects/dist/videoEffects.cjs");
-```
-
-### Web
-```html
-<script type="text/javascript" src="/path_to_modules/dist/videoEffects.umd.js"></script>
-```
 
 ## API
 
@@ -191,8 +199,18 @@ simulcast ladder.
 `isSupported()` is false only where neither software path exists, in which case
 `process()` returns the input track untouched and emits `error`.
 
-## License
-
-Published under the LGPL-2.1 license. See [LICENSE](./LICENSE).
+## Acknowledgments
 
 MediaPipe and the selfie segmentation model are Apache-2.0, copyright Google LLC.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+Published under the [LGPL-2.1](LICENSE) license.
+
+Published by **MDaemon Technologies, Ltd.**  
+Simple Secure Email  
+[https://www.mdaemon.com](https://www.mdaemon.com)
