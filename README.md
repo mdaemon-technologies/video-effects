@@ -3,7 +3,7 @@
 [![npm](https://img.shields.io/npm/v/@mdaemon/video-effects?color=blue)](https://www.npmjs.com/package/@mdaemon/video-effects)
 [![license](https://img.shields.io/npm/l/@mdaemon/video-effects?color=green)](LICENSE)
 [![node](https://img.shields.io/node/v/@mdaemon/video-effects)](https://nodejs.org)
-[![install size](https://packagephobia.com/badge?p=@mdaemon/video-effects)](https://packagephobia.com/result?p=@mdaemon/video-effects)
+[![install size](https://img.shields.io/npm/unpacked-size/@mdaemon/video-effects)](https://packagephobia.com/result?p=@mdaemon/video-effects)
 [![CI](https://github.com/mdaemon-technologies/video-effects/actions/workflows/node.js.yml/badge.svg)](https://github.com/mdaemon-technologies/video-effects/actions/workflows/node.js.yml)
 
 Camera background blur and replacement for WebRTC video tracks, with a track-in/track-out API built on MediaPipe selfie segmentation
