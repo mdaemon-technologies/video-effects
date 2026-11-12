@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  // Vitest strips types without checking them, so `npm test` runs this first.
+  // The build config stays browser-only so nothing in src/ can reach for a Node
+  // global; the capture-path tests need node:stream/web because jsdom ships no
+  // web streams.
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vitest/globals", "node"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"]
+}

@@ -5,7 +5,7 @@ const makeMask = (values: number[], width: number, height: number) => ({
   getAsUint8Array: () => Uint8Array.from(values),
   width,
   height,
-  close: jest.fn()
+  close: vi.fn()
 });
 
 interface StubOptions {
@@ -18,14 +18,14 @@ const stubVision = (options: StubOptions = {}) => {
     segmentForVideo: (_input, _timestamp, callback: (result: RawSegmenterResult) => void) => {
       callback({ categoryMask: options.mask ?? undefined });
     },
-    close: jest.fn()
+    close: vi.fn()
   };
   const module: VisionModule = {
     FilesetResolver: {
-      forVisionTasks: jest.fn(async (basePath: string) => ({ basePath }))
+      forVisionTasks: vi.fn(async (basePath: string) => ({ basePath }))
     },
     ImageSegmenter: {
-      createFromOptions: jest.fn(async (fileset: unknown, opts: Record<string, unknown>) => {
+      createFromOptions: vi.fn(async (fileset: unknown, opts: Record<string, unknown>) => {
         options.onCreate?.(fileset, opts);
         return segmenter;
       })
@@ -49,7 +49,7 @@ describe("resolveVisionModule", () => {
     // A partial global must not be mistaken for the real thing, or the failure
     // surfaces later as an opaque "not a function".
     const { module } = stubVision();
-    const importer = jest.fn(async () => module);
+    const importer = vi.fn(async () => module);
 
     const resolved = await resolveVisionModule(
       undefined,
@@ -63,12 +63,12 @@ describe("resolveVisionModule", () => {
 
   it("falls back to the dynamic import when there is no global", async () => {
     const { module } = stubVision();
-    const importer = jest.fn(async () => module);
+    const importer = vi.fn(async () => module);
     await expect(resolveVisionModule(undefined, {}, importer)).resolves.toBe(module);
   });
 
   it("explains how to fix a missing peer dependency", async () => {
-    const importer = jest.fn(async () => {
+    const importer = vi.fn(async () => {
       throw new Error("Cannot find module '@mediapipe/tasks-vision'");
     });
     await expect(resolveVisionModule(undefined, {}, importer)).rejects.toThrow(
@@ -78,7 +78,7 @@ describe("resolveVisionModule", () => {
 
   it("preserves the underlying import failure as the error cause", async () => {
     const underlying = new Error("network error fetching chunk");
-    const importer = jest.fn(async () => {
+    const importer = vi.fn(async () => {
       throw underlying;
     });
     await expect(resolveVisionModule(undefined, {}, importer)).rejects.toMatchObject({

@@ -29,7 +29,7 @@ const fakeTrack = (options: FakeTrackOptions = {}): MediaStreamTrack => {
       }
       applied.push(constraints);
     },
-    stop: jest.fn()
+    stop: vi.fn()
   };
   return track as unknown as MediaStreamTrack;
 };
@@ -101,7 +101,7 @@ describe("setEffect", () => {
 
   it("rejects an invalid effect without changing state or emitting", async () => {
     const fx = new VideoEffects(options);
-    const listener = jest.fn();
+    const listener = vi.fn();
     fx.on("effectchange", listener);
     await fx.setEffect({ type: "blur", strength: 10 });
     listener.mockClear();
@@ -207,7 +207,7 @@ describe("lifecycle", () => {
 
   it("drops listeners on destroy", async () => {
     const fx = new VideoEffects(options);
-    const listener = jest.fn();
+    const listener = vi.fn();
     fx.on("effectchange", listener);
 
     fx.destroy();

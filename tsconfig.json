@@ -12,7 +12,7 @@
     "skipLibCheck": true,
     "rootDir": "./src",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["jest"]
+    "types": []
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts", "node_modules"]

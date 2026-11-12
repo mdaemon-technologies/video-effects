@@ -1,0 +1,8 @@
+{
+  // Node-style ESM resolution, as used by consumers on module: nodenext.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext"
+  }
+}

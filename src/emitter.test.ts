@@ -8,8 +8,8 @@ interface Events extends Record<string, unknown> {
 describe("TinyEmitter", () => {
   it("delivers a payload to every registered handler", () => {
     const emitter = new TinyEmitter<Events>();
-    const a = jest.fn();
-    const b = jest.fn();
+    const a = vi.fn();
+    const b = vi.fn();
     emitter.on("ping", a).on("ping", b);
 
     expect(emitter.emit("ping", 42)).toBe(true);
@@ -24,7 +24,7 @@ describe("TinyEmitter", () => {
 
   it("keeps events separate", () => {
     const emitter = new TinyEmitter<Events>();
-    const ping = jest.fn();
+    const ping = vi.fn();
     emitter.on("ping", ping);
     emitter.emit("pong", "hello");
     expect(ping).not.toHaveBeenCalled();
@@ -32,7 +32,7 @@ describe("TinyEmitter", () => {
 
   it("stops delivering after off", () => {
     const emitter = new TinyEmitter<Events>();
-    const handler = jest.fn();
+    const handler = vi.fn();
     emitter.on("ping", handler);
     emitter.off("ping", handler);
     emitter.emit("ping", 1);
@@ -41,7 +41,7 @@ describe("TinyEmitter", () => {
 
   it("registers the same handler only once", () => {
     const emitter = new TinyEmitter<Events>();
-    const handler = jest.fn();
+    const handler = vi.fn();
     emitter.on("ping", handler).on("ping", handler);
     emitter.emit("ping", 1);
     expect(handler).toHaveBeenCalledTimes(1);
@@ -49,7 +49,7 @@ describe("TinyEmitter", () => {
 
   it("fires a once handler exactly one time", () => {
     const emitter = new TinyEmitter<Events>();
-    const handler = jest.fn();
+    const handler = vi.fn();
     emitter.once("ping", handler);
     emitter.emit("ping", 1);
     emitter.emit("ping", 2);
@@ -77,7 +77,7 @@ describe("TinyEmitter", () => {
 
   it("clears everything on removeAllListeners", () => {
     const emitter = new TinyEmitter<Events>();
-    const handler = jest.fn();
+    const handler = vi.fn();
     emitter.on("ping", handler).on("pong", handler);
     emitter.removeAllListeners();
     emitter.emit("ping", 1);
@@ -93,6 +93,6 @@ describe("TinyEmitter", () => {
 
   it("tolerates off for a handler that was never registered", () => {
     const emitter = new TinyEmitter<Events>();
-    expect(() => emitter.off("ping", jest.fn())).not.toThrow();
+    expect(() => emitter.off("ping", vi.fn())).not.toThrow();
   });
 });

@@ -110,7 +110,7 @@ const fakeContext = (): unknown => ({
 });
 
 const canvasTrack = (): MediaStreamTrack =>
-  ({ kind: "video", contentHint: "", stop: jest.fn() }) as unknown as MediaStreamTrack;
+  ({ kind: "video", contentHint: "", stop: vi.fn() }) as unknown as MediaStreamTrack;
 
 const fakeDocument = (video?: unknown): Document => {
   const doc = {
@@ -134,7 +134,7 @@ const fakeTrack = (): MediaStreamTrack =>
   ({
     kind: "video",
     getSettings: () => ({ width: 320, height: 180 }),
-    stop: jest.fn()
+    stop: vi.fn()
   }) as unknown as MediaStreamTrack;
 
 interface SegmenterProbe {
@@ -269,7 +269,7 @@ describe("WebCodecs path", () => {
 
   afterEach(() => {
     restoreGlobals();
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   const start = async (probe: SegmenterProbe, overrides: Partial<VideoEffectsOptions> = {}) => {
@@ -375,7 +375,7 @@ describe("WebCodecs path", () => {
   it("reports a watchdog trip as a budget failure", async () => {
     // Two calls per frame - start and end - ten milliseconds apart.
     let clock = 0;
-    jest.spyOn(performance, "now").mockImplementation(() => {
+    vi.spyOn(performance, "now").mockImplementation(() => {
       clock += 10;
       return clock;
     });
@@ -484,16 +484,16 @@ describe("canvas capture path", () => {
     }
     delete saved.__captureStream;
     restoreGlobals();
-    jest.useRealTimers();
-    jest.restoreAllMocks();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it("survives a clock that stands still between frames", async () => {
     // requestVideoFrameCallback is absent here, so the path falls back to
     // setInterval and takes its timestamp from performance.now(). A clock
     // coarsened for fingerprinting defence repeats values at 30fps.
-    jest.useFakeTimers();
-    jest.spyOn(performance, "now").mockReturnValue(1234);
+    vi.useFakeTimers();
+    vi.spyOn(performance, "now").mockReturnValue(1234);
 
     const probe = mediapipeLike();
     const fx = new VideoEffects({
@@ -509,7 +509,7 @@ describe("canvas capture path", () => {
     const output = await fx.process(fakeTrack(), { visionModule: probe.visionModule });
     expect(output).toBeDefined();
 
-    jest.advanceTimersByTime((1000 / 30) * 4 + 1);
+    vi.advanceTimersByTime((1000 / 30) * 4 + 1);
 
     expect(probe.accepted).toEqual([1234, 1235, 1236, 1237]);
     expect(probe.faulted()).toBe(false);
@@ -519,9 +519,9 @@ describe("canvas capture path", () => {
   });
 
   it("starts each pipeline from a fresh timestamp expectation", async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     let clock = 5000;
-    jest.spyOn(performance, "now").mockImplementation(() => {
+    vi.spyOn(performance, "now").mockImplementation(() => {
       clock += 100;
       return clock;
     });
@@ -534,7 +534,7 @@ describe("canvas capture path", () => {
     });
     await fx.setEffect({ type: "blur" });
     await fx.process(fakeTrack(), { visionModule: first.visionModule });
-    jest.advanceTimersByTime(100);
+    vi.advanceTimersByTime(100);
     expect(first.accepted.length).toBeGreaterThan(0);
 
     // Rewind the clock behind the last timestamp the old graph accepted. A new
@@ -543,7 +543,7 @@ describe("canvas capture path", () => {
     const second = mediapipeLike();
     clock = 0;
     await fx.process(fakeTrack(), { visionModule: second.visionModule });
-    jest.advanceTimersByTime(100);
+    vi.advanceTimersByTime(100);
 
     expect(second.accepted.length).toBeGreaterThan(0);
     expect(second.accepted[0]).toBeLessThan(first.accepted[0]);

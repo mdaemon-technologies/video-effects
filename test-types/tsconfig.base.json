@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noEmit": true,
+    // Off on purpose: checking the shipped .d.ts files is the point.
+    "skipLibCheck": false,
+    "types": []
+  },
+  "files": ["consumer.ts"]
+}

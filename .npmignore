@@ -103,12 +103,14 @@ typings/
 .tern-port
 
 src/
-rollup.config.js
+vite.config.ts
 package-lock.json
 .gitattributes
 .gitignore
 .github
-jest.config.ts
+tsconfig.test.json
+test-types/
+scripts/
 
 #ai stuff
 claude.md

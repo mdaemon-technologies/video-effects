@@ -1,0 +1,11 @@
+{
+  // Older consumers that ignore "exports" and read the "typings" field.
+  // TypeScript 7 removed node10, so this one runs under TypeScript 6.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    "esModuleInterop": true,
+    "ignoreDeprecations": "6.0"
+  }
+}

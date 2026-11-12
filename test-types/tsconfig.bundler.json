@@ -1,0 +1,8 @@
+{
+  // Vite, webpack, esbuild: resolves through the "types" condition in "exports".
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler"
+  }
+}

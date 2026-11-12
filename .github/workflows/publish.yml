@@ -27,6 +27,7 @@ jobs:
     - run: npm ci
     - run: npm run build
     - run: npm test
+    - run: npm run test:types
     - name: Check the release tag matches package.json
       env:
         TAG: ${{ github.event.release.tag_name }}

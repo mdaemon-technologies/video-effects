@@ -51,6 +51,18 @@ const VideoEffects = require("@mdaemon/video-effects");
 <script type="text/javascript" src="/path_to_modules/dist/videoEffects.umd.js"></script>
 ```
 
+### TypeScript
+
+Type declarations ship in the package; there is no separate `@types` package.
+Before each release they are type-checked from a consumer's side under
+`bundler` and `nodenext` module resolution with TypeScript 7, and under
+`node10` with TypeScript 6. The option and event types are exported by name:
+
+```ts
+import VideoEffects from "@mdaemon/video-effects";
+import type { BackgroundEffect, DegradedEvent, VideoEffectsOptions } from "@mdaemon/video-effects";
+```
+
 ## Serving the assets
 
 MediaPipe needs its WASM runtime and a `.tflite` model at runtime. They are not
@@ -198,6 +210,20 @@ simulcast ladder.
 
 `isSupported()` is false only where neither software path exists, in which case
 `process()` returns the input track untouched and emits `error`.
+
+## Development
+
+The library is built with Vite and tested with Vitest. Building and testing need
+Node 22.12 or later; CI runs Node 22, 24 and 26.
+
+```cmd
+npm install
+npm run build        :: dist/ bundles with Vite, then .d.ts with TypeScript 7
+npm test             :: type-check src and tests, then run Vitest
+npm run test:types   :: compile a consumer against the built dist/ (run build first)
+```
+
+`dist/` is committed, so rebuild after changing `src/`.
 
 ## Acknowledgments
 
