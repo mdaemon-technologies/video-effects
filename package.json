@@ -14,10 +14,11 @@
   "scripts": {
     "test": "node node_modules/typescript/bin/tsc -p tsconfig.test.json && vitest run",
     "test:types": "node scripts/test-types.mjs",
+    "test:smoke": "node scripts/test-smoke.mjs",
     "dev-test": "vitest",
     "build": "vite build && node node_modules/typescript/bin/tsc -p tsconfig.json --emitDeclarationOnly",
     "dev": "vite build --watch",
-    "pub": "npm run build && npm run test && npm run test:types && npm publish"
+    "pub": "npm run build && npm run test && npm run test:types && npm run test:smoke && npm publish"
   },
   "repository": {
     "type": "git",

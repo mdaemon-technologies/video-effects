@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests run on Vitest instead of Jest, and CI runs on Node 22, 24 and 26.
   `engines` still allows Node 20: the package is browser code, and the Node
   version only matters to the build and test tooling.
+- CI and the publish workflow smoke-test Node 20. The packed package is installed
+  into a scratch project with `--engine-strict` and loaded through both
+  `require()` and `import`. Both workflows also fail when the committed `dist/`
+  differs from a fresh build.
 
 ## [1.2.1] - 2026-09-21
 

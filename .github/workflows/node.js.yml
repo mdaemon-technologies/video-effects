@@ -1,4 +1,5 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# Builds and tests on every Node the dev toolchain supports, then smoke-tests the packed package on
+# the older Node versions that "engines" still allows consumers to use.
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
 
 name: Node.js CI
@@ -9,6 +10,9 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+
 jobs:
   build:
 
@@ -16,8 +20,8 @@ jobs:
 
     strategy:
       matrix:
+        # Vitest 5 and jsdom need Node 22.12+. See https://nodejs.org/en/about/releases/
         node-version: [22.x, 24.x, 26.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
     steps:
     - uses: actions/checkout@v7
@@ -27,7 +31,30 @@ jobs:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
     - run: npm ci
-    - run: npm run build --if-present
+    - run: npm run build
+    - name: Check the committed dist/ matches the build
+      run: |
+        git status --porcelain -- dist
+        test -z "$(git status --porcelain -- dist)" || { echo "::error::dist/ is stale. Run npm run build and commit the result."; exit 1; }
     - run: npm test
     - run: npm run test:types
-    
+
+  smoke:
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        # Node versions "engines" allows that the build matrix cannot cover. Add one here when
+        # lowering "engines", and drop it when raising "engines" past it.
+        node-version: [20.x]
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ matrix.node-version }}
+    # Packs the committed dist/, installs it with --engine-strict, and loads it through
+    # require() and import. Needs no dev dependencies, so there is no npm ci.
+    - run: npm run test:smoke

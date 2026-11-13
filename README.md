@@ -214,13 +214,16 @@ simulcast ladder.
 ## Development
 
 The library is built with Vite and tested with Vitest. Building and testing need
-Node 22.12 or later; CI runs Node 22, 24 and 26.
+Node 22.12 or later; CI runs Node 22, 24 and 26. Node 20, which consumers can
+still use, is covered by a smoke test that installs the packed package and loads
+it through `require()` and `import`.
 
 ```cmd
 npm install
 npm run build        :: dist/ bundles with Vite, then .d.ts with TypeScript 7
 npm test             :: type-check src and tests, then run Vitest
 npm run test:types   :: compile a consumer against the built dist/ (run build first)
+npm run test:smoke   :: install the packed package into a scratch project and load it
 ```
 
 `dist/` is committed, so rebuild after changing `src/`.
